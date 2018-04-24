@@ -60,6 +60,17 @@ extension NSUIPanGestureRecognizer
     }
 }
 
+// Begin pan gesture as soon as you put your finger down
+// https://stackoverflow.com/a/45907509
+class NSUIInstantPanGestureRecognizer: NSUIPanGestureRecognizer {
+
+    override func touchesBegan(_ touches: Set<NSUITouch>, with event: NSUIEvent) {
+        if (self.state == .began) { return }
+        super.touchesBegan(touches, with: event)
+        self.state = .began
+    }
+}
+
 #if !os(tvOS)
 extension NSUIRotationGestureRecognizer
 {
