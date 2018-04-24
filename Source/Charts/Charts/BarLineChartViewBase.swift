@@ -122,7 +122,12 @@ open class BarLineChartViewBase: ChartViewBase, BarLineScatterCandleBubbleChartD
         _tapGestureRecognizer = NSUITapGestureRecognizer(target: self, action: #selector(tapGestureRecognized(_:)))
         _doubleTapGestureRecognizer = NSUITapGestureRecognizer(target: self, action: #selector(doubleTapGestureRecognized(_:)))
         _doubleTapGestureRecognizer.nsuiNumberOfTapsRequired = 2
-        _panGestureRecognizer = NSUIPanGestureRecognizer(target: self, action: #selector(panGestureRecognized(_:)))
+        #if os(iOS) || os(tvOS)
+        _panGestureRecognizer = NSUIInstantPanGestureRecognizer(target: self, action: #selector(panGestureRecognized(_:)))
+        #endif
+        #if os(OSX)
+            _panGestureRecognizer = NSUIPanGestureRecognizer(target: self, action: #selector(panGestureRecognized(_:)))
+        #endif
         
         _panGestureRecognizer.delegate = self
         
@@ -728,6 +733,10 @@ open class BarLineChartViewBase: ChartViewBase, BarLineScatterCandleBubbleChartD
                 // We will only handle highlights on NSUIGestureRecognizerState.Changed
                 
                 _isDragging = false
+                
+                let h = getHighlightByTouchPoint(recognizer.location(in: self))
+                self.lastHighlighted = h
+                self.highlightValue(h, callDelegate: true)
             }
         }
         else if recognizer.state == NSUIGestureRecognizerState.changed
@@ -779,6 +788,10 @@ open class BarLineChartViewBase: ChartViewBase, BarLineScatterCandleBubbleChartD
                 }
                 
                 _isDragging = false
+            }
+            else if isHighlightPerDragEnabled
+            {
+                self.highlightValue(nil, callDelegate: true)
             }
             
             if _outerScrollView !== nil

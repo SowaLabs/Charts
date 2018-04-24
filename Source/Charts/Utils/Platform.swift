@@ -57,6 +57,16 @@ types are aliased to either their UI* implementation (on iOS) or their NS* imple
             return super.location(ofTouch: touch, in: inView)
         }
     }
+
+    import UIKit.UIGestureRecognizerSubclass
+    class NSUIInstantPanGestureRecognizer: NSUIPanGestureRecognizer {
+        
+        override func touchesBegan(_ touches: Set<NSUITouch>, with event: NSUIEvent) {
+            if (self.state == NSUIGestureRecognizerState.began) { return }
+            super.touchesBegan(touches, with: event)
+            self.state = NSUIGestureRecognizerState.began
+        }
+    }
     
 #if !os(tvOS)
     extension NSUIRotationGestureRecognizer
