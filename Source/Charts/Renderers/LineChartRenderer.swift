@@ -48,7 +48,28 @@ open class LineChartRenderer: LineRadarRenderer
         }
     }
     
-    @objc open func drawDataSet(context: CGContext, dataSet: ILineChartDataSet)
+    // draws a chart highlighting the data part from selection until the end
+    open override func drawData(context: CGContext, withSelection selection: Highlight)
+    {
+        guard let lineData = dataProvider?.lineData else { return }
+        
+        for i in 0 ..< lineData.dataSetCount
+        {
+            guard let set = lineData.getDataSetByIndex(i) else { continue }
+            
+            if set.isVisible
+            {
+                if !(set is ILineChartDataSet)
+                {
+                    fatalError("Datasets for LineChartRenderer must conform to ILineChartDataSet")
+                }
+                
+                drawDataSet(context: context, dataSet: set as! ILineChartDataSet, withSelection: selection)
+            }
+        }
+    }
+    
+    @objc open func drawDataSet(context: CGContext, dataSet: ILineChartDataSet, withSelection selection: Highlight? = nil)
     {
         if dataSet.entryCount < 1
         {
@@ -72,7 +93,7 @@ open class LineChartRenderer: LineRadarRenderer
         {
         case .linear: fallthrough
         case .stepped:
-            drawLinear(context: context, dataSet: dataSet)
+            drawLinear(context: context, dataSet: dataSet, withSelection: selection)
             
         case .cubicBezier:
             drawCubicBezier(context: context, dataSet: dataSet)
@@ -284,7 +305,7 @@ open class LineChartRenderer: LineRadarRenderer
     
     private var _lineSegments = [CGPoint](repeating: CGPoint(), count: 2)
     
-    @objc open func drawLinear(context: CGContext, dataSet: ILineChartDataSet)
+    @objc open func drawLinear(context: CGContext, dataSet: ILineChartDataSet, withSelection selection: Highlight? = nil)
     {
         guard let dataProvider = dataProvider else { return }
         
@@ -375,56 +396,79 @@ open class LineChartRenderer: LineRadarRenderer
         else
         { // only one color per dataset
             
-            var e1: ChartDataEntry!
-            var e2: ChartDataEntry!
+            let startPoint = _xBounds.min
+            let endPoint = _xBounds.range + _xBounds.min
             
-            e1 = dataSet.entryForIndex(_xBounds.min)
+            var startPoints = [startPoint]
+            var endPoints = [endPoint]
+            var colors = [dataSet.color(atIndex: 0).cgColor]
             
-            if e1 != nil
+            // if we have a selection going on, render two-part chart with different colors
+            if let highlight = selection, let selectionEntry = entryForHighlight(highlight: highlight)
             {
-                context.beginPath()
-                var firstPoint = true
+                startPoints = [startPoint, dataSet.entryIndex(entry: selectionEntry)]
+                // move endPoint to one past the last element to get a smoother rendering
+                endPoints = [min(endPoint, dataSet.entryIndex(entry: selectionEntry) + 1), endPoint]
+                colors = [dataSet.color(atIndex: 0).withAlphaComponent(0.25).cgColor,
+                          dataSet.color(atIndex: 0).cgColor]
+            }
+            
+            for i in 0..<startPoints.count
+            {
+            
+                var e1: ChartDataEntry!
+                var e2: ChartDataEntry!
                 
-                for x in stride(from: _xBounds.min, through: _xBounds.range + _xBounds.min, by: 1)
+                e1 = dataSet.entryForIndex(startPoints[i])
+                
+                if e1 != nil
                 {
-                    e1 = dataSet.entryForIndex(x == 0 ? 0 : (x - 1))
-                    e2 = dataSet.entryForIndex(x)
+                    var firstPoint = true
                     
-                    if e1 == nil || e2 == nil { continue }
+                    context.beginPath()
                     
-                    let pt = CGPoint(
-                        x: CGFloat(e1.x),
-                        y: CGFloat(e1.y * phaseY)
-                        ).applying(valueToPixelMatrix)
-                    
-                    if firstPoint
+                    for x in stride(from: startPoints[i], through: endPoints[i], by: 1)
                     {
-                        context.move(to: pt)
-                        firstPoint = false
-                    }
-                    else
-                    {
-                        context.addLine(to: pt)
-                    }
-                    
-                    if isDrawSteppedEnabled
-                    {
+                        e1 = dataSet.entryForIndex(x == startPoints[i] ? startPoints[i] : (x - 1))
+                        e2 = dataSet.entryForIndex(x)
+                        
+                        if e1 == nil || e2 == nil { continue }
+                        
+                        let pt = CGPoint(
+                            x: CGFloat(e1.x),
+                            y: CGFloat(e1.y * phaseY)
+                            ).applying(valueToPixelMatrix)
+                        
+                        if firstPoint
+                        {
+                            context.move(to: pt)
+                            firstPoint = false
+                        }
+                        else
+                        {
+                            context.addLine(to: pt)
+                        }
+                        
+                        if isDrawSteppedEnabled
+                        {
+                            context.addLine(to: CGPoint(
+                                x: CGFloat(e2.x),
+                                y: CGFloat(e1.y * phaseY)
+                                ).applying(valueToPixelMatrix))
+                        }
+                        
                         context.addLine(to: CGPoint(
                             x: CGFloat(e2.x),
-                            y: CGFloat(e1.y * phaseY)
+                            y: CGFloat(e2.y * phaseY)
                             ).applying(valueToPixelMatrix))
                     }
                     
-                    context.addLine(to: CGPoint(
-                            x: CGFloat(e2.x),
-                            y: CGFloat(e2.y * phaseY)
-                        ).applying(valueToPixelMatrix))
-                }
-                
-                if !firstPoint
-                {
-                    context.setStrokeColor(dataSet.color(atIndex: 0).cgColor)
-                    context.strokePath()
+                    
+                    if !firstPoint
+                    {
+                        context.setStrokeColor(colors[i])
+                        context.strokePath()
+                    }
                 }
             }
         }
@@ -694,6 +738,28 @@ open class LineChartRenderer: LineRadarRenderer
         }
         
         context.restoreGState()
+    }
+    
+    // returns entry that is highlighted
+    func entryForHighlight(highlight: Highlight) -> ChartDataEntry?
+    {
+        guard
+            let dataProvider = dataProvider,
+            let lineData = dataProvider.lineData
+            else { return nil }
+        
+        guard let set = lineData.getDataSetByIndex(highlight.dataSetIndex) as? ILineChartDataSet
+            , set.isHighlightEnabled
+            else { return nil }
+        
+        guard let entry = set.entryForXValue(highlight.x, closestToY: highlight.y) else { return nil }
+        
+        if !isInBoundsX(entry: entry, dataSet: set)
+        {
+            return nil
+        }
+        
+        return entry
     }
     
     open override func drawHighlighted(context: CGContext, indices: [Highlight])
