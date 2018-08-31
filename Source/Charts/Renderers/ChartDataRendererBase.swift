@@ -46,6 +46,11 @@ open class DataRenderer: Renderer
         fatalError("drawData() cannot be called on DataRenderer")
     }
     
+    @objc open func drawData(context: CGContext, withSelection selection: Highlight)
+    {
+        fatalError("drawData() cannot be called on DataRenderer")
+    }
+    
     @objc open func drawValues(context: CGContext)
     {
         fatalError("drawValues() cannot be called on DataRenderer")

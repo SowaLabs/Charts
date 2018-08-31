@@ -237,7 +237,21 @@ open class BarLineChartViewBase: ChartViewBase, BarLineScatterCandleBubbleChartD
         if clipDataToContentEnabled {
             context.clip(to: _viewPortHandler.contentRect)
         }
-        renderer.drawData(context: context)
+        
+        // only LineChartRenderer has drawData(context:, withSelection:)
+        // check if we have a selection and drag enabled
+        // used for visually separating selected part of the chart with different colors
+        if self.isHighlightPerDragEnabled == true, valuesToHighlight() == true, _indicesToHighlight.count == 1,
+            let selection = _indicesToHighlight.first,
+            let lineChartRenderer = renderer as? LineChartRenderer
+        {
+            lineChartRenderer.drawData(context: context, withSelection: selection)
+        }
+        else
+        {
+            renderer.drawData(context: context)
+        }
+        
         
         // if highlighting is enabled
         if (valuesToHighlight())

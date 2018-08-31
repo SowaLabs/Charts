@@ -49,7 +49,28 @@ open class LineChartRenderer: LineRadarRenderer
         }
     }
     
-    @objc open func drawDataSet(context: CGContext, dataSet: ILineChartDataSet)
+    // draws a chart highlighting the data part from selection until the end
+    open override func drawData(context: CGContext, withSelection selection: Highlight)
+    {
+        guard let lineData = dataProvider?.lineData else { return }
+        
+        for i in 0 ..< lineData.dataSetCount
+        {
+            guard let set = lineData.getDataSetByIndex(i) else { continue }
+            
+            if set.isVisible
+            {
+                if !(set is ILineChartDataSet)
+                {
+                    fatalError("Datasets for LineChartRenderer must conform to ILineChartDataSet")
+                }
+                
+                drawDataSet(context: context, dataSet: set as! ILineChartDataSet, withSelection: selection)
+            }
+        }
+    }
+    
+    @objc open func drawDataSet(context: CGContext, dataSet: ILineChartDataSet, withSelection selection: Highlight? = nil)
     {
         if dataSet.entryCount < 1
         {
@@ -75,7 +96,7 @@ open class LineChartRenderer: LineRadarRenderer
         {
         case .linear: fallthrough
         case .stepped:
-            drawLinear(context: context, dataSet: dataSet)
+            drawLinear(context: context, dataSet: dataSet, withSelection: selection)
             
         case .cubicBezier:
             drawCubicBezier(context: context, dataSet: dataSet)
@@ -285,7 +306,7 @@ open class LineChartRenderer: LineRadarRenderer
     
     private var _lineSegments = [CGPoint](repeating: CGPoint(), count: 2)
     
-    @objc open func drawLinear(context: CGContext, dataSet: ILineChartDataSet)
+    @objc open func drawLinear(context: CGContext, dataSet: ILineChartDataSet, withSelection selection: Highlight? = nil)
     {
         guard let dataProvider = dataProvider else { return }
         
@@ -305,6 +326,13 @@ open class LineChartRenderer: LineRadarRenderer
         if dataSet.isDrawFilledEnabled && entryCount > 0
         {
             drawLinearFill(context: context, dataSet: dataSet, trans: trans, bounds: _xBounds)
+        }
+        
+        // if there is no selection, set it to max value
+        var selectionIndex: Int? = nil
+        if let selection = selection, let selectionEntry = entryForHighlight(highlight: selection)
+        {
+            selectionIndex = dataSet.entryIndex(entry: selectionEntry)
         }
         
         context.saveGState()
@@ -370,7 +398,12 @@ open class LineChartRenderer: LineRadarRenderer
             guard viewPortHandler.isIntersectingLine(from: firstCoordinate, to: lastCoordinate) else { continue }
             
             // get the color that is set for this line-segment
-            context.setStrokeColor(dataSet.color(atIndex: j).cgColor)
+            var color = dataSet.color(atIndex: j)
+            if let selectionIndex = selectionIndex, j < selectionIndex
+            {
+                color = color.withAlphaComponent(0.25)
+            }
+            context.setStrokeColor(color.cgColor)
             context.strokeLineSegments(between: _lineSegments)
         }
         
@@ -678,6 +711,28 @@ open class LineChartRenderer: LineRadarRenderer
         // Merge nested ordered arrays into the single accessibleChartElements.
         accessibleChartElements.append(contentsOf: accessibilityOrderedElements.flatMap { $0 } )
         accessibilityPostLayoutChangedNotification()
+    }
+    
+    // returns entry that is highlighted
+    func entryForHighlight(highlight: Highlight) -> ChartDataEntry?
+    {
+        guard
+            let dataProvider = dataProvider,
+            let lineData = dataProvider.lineData
+            else { return nil }
+        
+        guard let set = lineData.getDataSetByIndex(highlight.dataSetIndex) as? ILineChartDataSet
+            , set.isHighlightEnabled
+            else { return nil }
+        
+        guard let entry = set.entryForXValue(highlight.x, closestToY: highlight.y) else { return nil }
+        
+        if !isInBoundsX(entry: entry, dataSet: set)
+        {
+            return nil
+        }
+        
+        return entry
     }
     
     open override func drawHighlighted(context: CGContext, indices: [Highlight])
