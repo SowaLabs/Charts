@@ -330,7 +330,9 @@ open class LineChartRenderer: LineRadarRenderer
         
         // if there is no selection, set it to max value
         var selectionIndex: Int? = nil
-        if let selection = selection, let selectionEntry = entryForHighlight(highlight: selection)
+        let chart = dataProvider as? LineChartView;
+        if let selection = selection,
+            let selectionEntry = chart?.isHighlightMultipleEnabled ?? false ? entryForHighlight(highlight: selection, set: dataSet) : entryForHighlight(highlight: selection)
         {
             selectionIndex = dataSet.entryIndex(entry: selectionEntry)
         }
@@ -726,7 +728,28 @@ open class LineChartRenderer: LineRadarRenderer
             else { return nil }
         
         guard let entry = set.entryForXValue(highlight.x, closestToY: highlight.y) else { return nil }
+    
+        if !isInBoundsX(entry: entry, dataSet: set)
+        {
+            return nil
+        }
         
+        return entry
+    }
+    
+    func entryForHighlight(highlight: Highlight, set: ILineChartDataSet) -> ChartDataEntry?
+    {
+        guard set.isHighlightEnabled
+            else { return nil }
+        
+        let entriesForX = set.entriesForXValue(highlight.x)
+        
+        if entriesForX.isEmpty {
+            return nil
+        }
+        
+        let entry = entriesForX[0]
+    
         if !isInBoundsX(entry: entry, dataSet: set)
         {
             return nil

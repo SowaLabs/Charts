@@ -68,6 +68,9 @@ open class ChartViewBase: NSUIView, ChartDataProvider, AnimatorDelegate
     /// Flag that indicates if highlighting per tap (touch) is enabled
     private var _highlightPerTapEnabled = true
     
+    /// Flag that indicates whether to highlight points on all datasets based on the touch event at a specific x coordinate
+    private var _highlightMultipleEnabled = false
+    
     /// If set to true, chart continues to scroll after touch up
     @objc open var dragDecelerationEnabled = true
     
@@ -384,8 +387,21 @@ open class ChartViewBase: NSUIView, ChartDataProvider, AnimatorDelegate
     open override func accessibilityChildren() -> [Any]? {
         return renderer?.accessibleChartElements
     }
-
+    
     // MARK: - Highlighting
+    
+    /// **default**: true
+    @objc open var highlightMultipleEnabled: Bool
+    {
+        get { return _highlightMultipleEnabled }
+        set { _highlightMultipleEnabled = newValue }
+    }
+    
+    @objc open var isHighlightMultipleEnabled: Bool
+    {
+        return highlightMultipleEnabled
+    }
+    
     
     /// The array of currently highlighted values. This might an empty if nothing is highlighted.
     @objc open var highlighted: [Highlight]
